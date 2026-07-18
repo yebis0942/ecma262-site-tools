@@ -10,9 +10,11 @@ HTML にサイト独自のウィジェットを注入し、検証済みのパフ
 ```sh
 npm install
 
-# ビルド (単一ページ)
-npx ecma262-build path/to/spec.html out/ \
-  --version-bar /path/to/version-bar-manifest.json
+# ビルド (単一ページ)。spec.html は ecmarkup ソースをそのまま渡す (事前ビルド不要。
+# emu-import もビルド時に解決される)。img/ など ecmarkup が扱わない付属リソースは --copy で。
+npx ecma262-build path/to/ecma262/spec.html out/ \
+  --version-bar /path/to/version-bar-manifest.json \
+  --copy path/to/ecma262/img
 
 # multipage
 npx ecma262-build path/to/spec.html out/ --multipage --lint-spec
@@ -27,6 +29,7 @@ npx ecma262-build path/to/spec.html out/ --multipage --lint-spec
 | `--no-impl-links` | impl-links ウィジェットを無効化 |
 | `--multipage` | multipage ビルド（サブページも相対パスを個別計算して注入） |
 | `--no-menu-patches` | menu.js パッチをスキップ（素の ecmarkup 挙動） |
+| `--copy <path>` | ファイル/ディレクトリを出力先へコピー（複数指定可）。ecma262 の `img/` のような ecmarkup が扱わないスペック付属リソース用 |
 
 ### version-bar データの生成
 

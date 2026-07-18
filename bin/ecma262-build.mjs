@@ -12,6 +12,8 @@
 //   --multipage                    multipage build (outdir/index.html + multipage/*.html)
 //   --lint-spec                    enable ecmarkup's spec lints
 //   --no-menu-patches              skip the menu.js performance patches
+//   --copy <path>                  copy a file/directory into outdir (repeatable;
+//                                  e.g. --copy path/to/ecma262/img)
 //   --verbose                      log build progress
 import { buildSite } from '../lib/build.mjs';
 
@@ -44,6 +46,9 @@ for (let i = 0; i < argv.length; i++) {
     case '--no-menu-patches':
       options.menuPatches = false;
       break;
+    case '--copy':
+      (options.copy ??= []).push(argv[++i] ?? fail('--copy requires a path'));
+      break;
     case '--verbose':
       options.verbose = true;
       break;
@@ -54,7 +59,7 @@ for (let i = 0; i < argv.length; i++) {
 }
 
 if (positional.length !== 2) {
-  fail('Usage: ecma262-build <infile> <outdir> [--version-bar <manifest.json>] [--impl-links <data.json>|--no-impl-links] [--multipage] [--lint-spec] [--no-menu-patches] [--verbose]');
+  fail('Usage: ecma262-build <infile> <outdir> [--version-bar <manifest.json>] [--impl-links <data.json>|--no-impl-links] [--multipage] [--lint-spec] [--no-menu-patches] [--copy <path>] [--verbose]');
 }
 
 const [infile, outDir] = positional;
