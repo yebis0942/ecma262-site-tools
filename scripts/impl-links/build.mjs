@@ -21,7 +21,7 @@ import { loadSpecNames, nameToKey } from './spec-names.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, '..', '..');
-const OUTPUT_PATH = join(REPO_ROOT, 'impl-links.json');
+const OUTPUT_PATH = join(REPO_ROOT, 'data', 'impl-links.json');
 const EXTRACT_DIR = process.env.IMPL_LINKS_EXTRACT_DIR || join(SCRIPT_DIR, 'extract');
 const LIST_LIMIT = 20;
 

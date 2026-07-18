@@ -1,0 +1,60 @@
+name: update-impl-links
+
+on:
+  schedule:
+    - cron: '23 3 * * 1' # weekly, Monday 03:23 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Resolve latest engine tags
+        run: |
+          node scripts/impl-links/resolve-tag.mjs --json > "$RUNNER_TEMP/latest-tags.json"
+          cat "$RUNNER_TEMP/latest-tags.json"
+
+      - name: Check whether any engine tag changed
+        id: check
+        run: |
+          changed=$(node -e '
+            const fs = require("fs");
+            const latest = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/latest-tags.json", "utf8"));
+            let current = {};
+            try { current = JSON.parse(fs.readFileSync("data/impl-links.json", "utf8")).meta.engines; } catch {}
+            console.log(Object.keys(latest).some(k => latest[k] !== current[k]?.tag) ? "true" : "false");
+          ')
+          echo "changed=$changed"
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+
+      - name: Clone engine checkouts
+        if: steps.check.outputs.changed == 'true'
+        id: clone
+        run: |
+          node scripts/impl-links/ci-checkout.mjs "$RUNNER_TEMP/engines" | tee "$RUNNER_TEMP/ci-checkout.log"
+          echo "roots=$(tail -1 "$RUNNER_TEMP/ci-checkout.log")" >> "$GITHUB_OUTPUT"
+
+      - name: Regenerate impl-links.json
+        if: steps.check.outputs.changed == 'true'
+        run: node scripts/impl-links/build.mjs ${{ steps.clone.outputs.roots }}
+
+      - name: Create pull request
+        if: steps.check.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          add-paths: data/impl-links.json
+          branch: update-impl-links
+          commit-message: update data/impl-links.json to latest engine tags
+          title: Update impl-links.json to latest engine tags
+          body: >-
+            Automated regeneration of impl-links.json: at least one engine
+            published a new release tag. See scripts/impl-links/DESIGN.md.
