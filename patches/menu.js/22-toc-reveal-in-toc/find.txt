@@ -1,0 +1,35 @@
+Menu.prototype.revealInToc = function (path) {
+  let current = this.$toc.querySelectorAll('li.revealed');
+  for (let i = 0; i < current.length; i++) {
+    current[i].classList.remove('revealed');
+    current[i].classList.remove('revealed-leaf');
+  }
+
+  current = this.$toc;
+  let index = 0;
+  outer: while (index < path.length) {
+    let children = current.children;
+    for (let i = 0; i < children.length; i++) {
+      if ('#' + path[index].id === children[i].children[1].hash) {
+        children[i].classList.add('revealed');
+        if (index === path.length - 1) {
+          children[i].classList.add('revealed-leaf');
+          let rect = children[i].getBoundingClientRect();
+          // this.$toc.getBoundingClientRect().top;
+          let tocRect = this.$toc.getBoundingClientRect();
+          if (rect.top + 10 > tocRect.bottom) {
+            this.$toc.scrollTop =
+              this.$toc.scrollTop + (rect.top - tocRect.bottom) + (rect.bottom - rect.top);
+          } else if (rect.top < tocRect.top) {
+            this.$toc.scrollTop = this.$toc.scrollTop - (tocRect.top - rect.top);
+          }
+        }
+        current = children[i].querySelector('ol');
+        index++;
+        continue outer;
+      }
+    }
+    console.log('could not find location in table of contents', path);
+    break;
+  }
+};

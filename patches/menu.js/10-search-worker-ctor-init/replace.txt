@@ -1,0 +1,11 @@
+  this.loadBiblio();
+
+  // Search runs on a Web Worker when available so large biblios don't block the
+  // main thread. Falls back to synchronous search when Workers are unavailable
+  // or blocked (see _initWorker).
+  this._searchId = 0;
+  this._worker = null;
+  this._pendingSearchString = '';
+  this._initWorker();
+
+  document.addEventListener('keydown', this.documentKeydown.bind(this));

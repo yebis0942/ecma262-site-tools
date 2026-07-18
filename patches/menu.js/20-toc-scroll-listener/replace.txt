@@ -1,0 +1,19 @@
+  // update active clause on scroll
+  let scrollRafPending = false;
+  const boundUpdate = this.updateActiveClause.bind(this);
+  window.addEventListener('scroll', () => {
+    if (!scrollRafPending) {
+      scrollRafPending = true;
+      requestAnimationFrame(() => {
+        scrollRafPending = false;
+        boundUpdate();
+      });
+    }
+  });
+  this.updateActiveClause();
+
+  // clause margins can depend on viewport width (media queries), so drop the
+  // cached values when the window is resized
+  window.addEventListener('resize', () => {
+    marginCache = new WeakMap();
+  });

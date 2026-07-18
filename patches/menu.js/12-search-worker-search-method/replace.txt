@@ -1,0 +1,61 @@
+Search.prototype.search = function (searchString) {
+  // Bump the search id on every call so any in-flight worker result for an
+  // earlier query is ignored once it arrives, even across the early returns
+  // below (empty / single-character queries).
+  this._searchId++;
+  this._pendingSearchString = searchString;
+
+  if (searchString === '') {
+    this.displayResults([]);
+    this.hideSearch();
+    return;
+  } else {
+    this.showSearch();
+  }
+
+  if (searchString.length === 1) {
+    this.displayResults([]);
+    return;
+  }
+
+  if (this._worker) {
+    this._worker.postMessage({ type: 'search', id: this._searchId, searchString });
+    return;
+  }
+
+  let results;
+
+  if (/^[\d.]*$/.test(searchString)) {
+    results = this.biblio.clauses
+      .filter(clause => clause.number.substring(0, searchString.length) === searchString)
+      .map(clause => ({ key: getKey(clause), entry: clause }));
+  } else {
+    results = [];
+
+    for (let i = 0; i < this.biblio.entries.length; i++) {
+      let entry = this.biblio.entries[i];
+      let key = getKey(entry);
+      if (!key) {
+        // biblio entries without a key aren't searchable
+        continue;
+      }
+
+      let match = fuzzysearch(searchString, key);
+      if (match) {
+        results.push({ key, entry, match });
+      }
+    }
+
+    results.forEach(result => {
+      result.relevance = relevance(result, searchString);
+    });
+
+    results = results.sort((a, b) => b.relevance - a.relevance);
+  }
+
+  if (results.length > 50) {
+    results = results.slice(0, 50);
+  }
+
+  this.displayResults(results);
+};

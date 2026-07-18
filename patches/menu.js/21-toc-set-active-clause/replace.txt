@@ -1,0 +1,11 @@
+Menu.prototype.setActiveClause = function (clause) {
+  if (
+    this.$activeClause &&
+    clause.length === this.$activeClause.length &&
+    clause.every((el, i) => el === this.$activeClause[i])
+  ) {
+    return;
+  }
+  this.$activeClause = clause;
+  this.revealInToc(this.$activeClause);
+};

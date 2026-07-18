@@ -1,0 +1,35 @@
+function findActiveClause(root, path) {
+  path = path || [];
+
+  let visibleClauses = getVisibleClauses(root, path);
+  let midpoint = Math.floor(window.innerHeight / 2);
+
+  for (let [$clause, path] of visibleClauses) {
+    let { top: clauseTop, bottom: clauseBottom } = $clause.getBoundingClientRect();
+    let isFullyVisibleAboveTheFold =
+      clauseTop > 0 && clauseTop < midpoint && clauseBottom < window.innerHeight;
+    if (isFullyVisibleAboveTheFold) {
+      return path;
+    }
+  }
+
+  visibleClauses.sort(([, pathA], [, pathB]) => pathB.length - pathA.length);
+  for (let [$clause, path] of visibleClauses) {
+    let { top: clauseTop, bottom: clauseBottom } = $clause.getBoundingClientRect();
+    let $header = $clause.querySelector('h1');
+    let clauseStyles = getComputedStyle($clause);
+    let marginTop = Math.max(
+      0,
+      parseInt(clauseStyles['margin-top']),
+      parseInt(getComputedStyle($header)['margin-top']),
+    );
+    let marginBottom = Math.max(0, parseInt(clauseStyles['margin-bottom']));
+    let crossesMidpoint =
+      clauseTop - marginTop <= midpoint && clauseBottom + marginBottom >= midpoint;
+    if (crossesMidpoint) {
+      return path;
+    }
+  }
+
+  return path;
+}

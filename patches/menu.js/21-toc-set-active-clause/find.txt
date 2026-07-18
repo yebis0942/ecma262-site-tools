@@ -1,0 +1,4 @@
+Menu.prototype.setActiveClause = function (clause) {
+  this.$activeClause = clause;
+  this.revealInToc(this.$activeClause);
+};

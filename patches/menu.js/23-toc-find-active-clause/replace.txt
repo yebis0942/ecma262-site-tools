@@ -1,0 +1,43 @@
+let marginCache = new WeakMap();
+function getClauseMargins($clause) {
+  let cached = marginCache.get($clause);
+  if (cached) return cached;
+  let $header = $clause.querySelector('h1');
+  let clauseStyles = getComputedStyle($clause);
+  let marginTop = Math.max(
+    0,
+    parseInt(clauseStyles['margin-top']),
+    $header ? parseInt(getComputedStyle($header)['margin-top']) : 0,
+  );
+  let marginBottom = Math.max(0, parseInt(clauseStyles['margin-bottom']));
+  let result = { marginTop, marginBottom };
+  marginCache.set($clause, result);
+  return result;
+}
+
+function findActiveClause(root, path) {
+  path = path || [];
+
+  let visibleClauses = getVisibleClauses(root, path);
+  let midpoint = Math.floor(window.innerHeight / 2);
+
+  for (let [, path, rect] of visibleClauses) {
+    let isFullyVisibleAboveTheFold =
+      rect.top > 0 && rect.top < midpoint && rect.bottom < window.innerHeight;
+    if (isFullyVisibleAboveTheFold) {
+      return path;
+    }
+  }
+
+  visibleClauses.sort(([, pathA], [, pathB]) => pathB.length - pathA.length);
+  for (let [$clause, path, rect] of visibleClauses) {
+    let { marginTop, marginBottom } = getClauseMargins($clause);
+    let crossesMidpoint =
+      rect.top - marginTop <= midpoint && rect.bottom + marginBottom >= midpoint;
+    if (crossesMidpoint) {
+      return path;
+    }
+  }
+
+  return path;
+}

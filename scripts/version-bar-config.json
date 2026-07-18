@@ -1,0 +1,14 @@
+{
+  "versions": [
+    { "key": "es6",  "label": "ES2015 (6th)",  "url": "https://262.ecma-international.org/6.0/" },
+    { "key": "es7",  "label": "ES2016 (7th)",  "url": "https://262.ecma-international.org/7.0/" },
+    { "key": "es8",  "label": "ES2017 (8th)",  "url": "https://262.ecma-international.org/8.0/" },
+    { "key": "es9",  "label": "ES2018 (9th)",  "url": "https://262.ecma-international.org/9.0/" },
+    { "key": "es10", "label": "ES2019 (10th)", "url": "https://262.ecma-international.org/10.0/" },
+    { "key": "es11", "label": "ES2020 (11th)", "url": "https://262.ecma-international.org/11.0/" },
+    { "key": "es12", "label": "ES2021 (12th)", "url": "https://262.ecma-international.org/12.0/" },
+    { "key": "es13", "label": "ES2022 (13th)", "url": "https://262.ecma-international.org/13.0/" },
+    { "key": "es14", "label": "ES2023 (14th)", "url": "https://262.ecma-international.org/14.0/" },
+    { "key": "es15", "label": "ES2024 (15th)", "url": "https://262.ecma-international.org/15.0/" }
+  ]
+}

@@ -1,0 +1,59 @@
+Search.prototype.loadBiblio = function () {
+  if (typeof biblio === 'undefined') {
+    console.error('could not find biblio');
+    this.biblio = { refToClause: {}, entries: [] };
+  } else {
+    this.biblio = biblio;
+    this.biblio.clauses = this.biblio.entries.filter(e => e.type === 'clause');
+    this.biblio.byId = this.biblio.entries.reduce((map, entry) => {
+      map[entry.id] = entry;
+      return map;
+    }, {});
+    let refParentClause = Object.create(null);
+    this.biblio.refParentClause = refParentClause;
+    let refsByClause = this.biblio.refsByClause;
+    Object.keys(refsByClause).forEach(clause => {
+      refsByClause[clause].forEach(ref => {
+        refParentClause[ref] = clause;
+      });
+    });
+  }
+};
+
+Search.prototype._initWorker = function () {
+  if (typeof Worker === 'undefined' || typeof URL === 'undefined' || !URL.createObjectURL) {
+    return;
+  }
+
+  let url;
+  try {
+    let blob = new Blob([buildSearchWorkerSource()], { type: 'application/javascript' });
+    url = URL.createObjectURL(blob);
+    this._worker = new Worker(url);
+  } catch (e) {
+    // Workers may be unavailable or blocked by CSP; fall back to synchronous search.
+    this._worker = null;
+    if (url) {
+      URL.revokeObjectURL(url);
+    }
+    return;
+  }
+  // The worker has captured the source; the blob URL is no longer needed.
+  URL.revokeObjectURL(url);
+
+  this._worker.postMessage({ type: 'init', entries: this.biblio.entries });
+
+  let self = this;
+  this._worker.onmessage = function (e) {
+    // Ignore results for a query that has since been superseded.
+    if (e.data.id === self._searchId) {
+      self.displayResults(e.data.results);
+    }
+  };
+  this._worker.onerror = function () {
+    // The worker failed to load (e.g. blocked by CSP) or threw at runtime. Drop
+    // it and re-run the current query synchronously so results still appear.
+    self._worker = null;
+    self.search(self._pendingSearchString);
+  };
+};

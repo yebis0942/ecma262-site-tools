@@ -1,0 +1,21 @@
+Search.prototype.loadBiblio = function () {
+  if (typeof biblio === 'undefined') {
+    console.error('could not find biblio');
+    this.biblio = { refToClause: {}, entries: [] };
+  } else {
+    this.biblio = biblio;
+    this.biblio.clauses = this.biblio.entries.filter(e => e.type === 'clause');
+    this.biblio.byId = this.biblio.entries.reduce((map, entry) => {
+      map[entry.id] = entry;
+      return map;
+    }, {});
+    let refParentClause = Object.create(null);
+    this.biblio.refParentClause = refParentClause;
+    let refsByClause = this.biblio.refsByClause;
+    Object.keys(refsByClause).forEach(clause => {
+      refsByClause[clause].forEach(ref => {
+        refParentClause[ref] = clause;
+      });
+    });
+  }
+};

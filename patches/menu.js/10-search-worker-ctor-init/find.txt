@@ -1,0 +1,3 @@
+  this.loadBiblio();
+
+  document.addEventListener('keydown', this.documentKeydown.bind(this));

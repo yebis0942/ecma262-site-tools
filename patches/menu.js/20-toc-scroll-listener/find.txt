@@ -1,0 +1,3 @@
+  // update active clause on scroll
+  window.addEventListener('scroll', debounce(this.updateActiveClause.bind(this)));
+  this.updateActiveClause();

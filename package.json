@@ -1,0 +1,20 @@
+{
+	"name": "ecma262-site-tools",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Build wrapper around ecmarkup: injects site widgets (version bar, version compare, engine implementation links) into the generated spec and applies verified performance patches to the emitted assets.",
+	"bin": {
+		"ecma262-build": "bin/ecma262-build.mjs"
+	},
+	"scripts": {
+		"test": "node test/smoke.mjs",
+		"generate-version-bar-data": "tsx scripts/generate-version-bar-data.ts"
+	},
+	"dependencies": {
+		"ecmarkup": "24.2.1",
+		"parse5": "^7.1.2"
+	},
+	"devDependencies": {
+		"tsx": "^4.19.0"
+	}
+}

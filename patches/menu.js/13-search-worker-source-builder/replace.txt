@@ -1,0 +1,44 @@
+
+// Build the Web Worker source by serializing the exact same search primitives
+// used on the main thread. This keeps the worker from ever drifting from the
+// main-thread implementations of fuzzysearch/relevance/getKey.
+function buildSearchWorkerSource() {
+  return [
+    fuzzysearch.toString(),
+    relevance.toString(),
+    getKey.toString(),
+    'var searchEntries = [];',
+    'var searchClauses = [];',
+    'self.onmessage = function (e) {',
+    '  var msg = e.data;',
+    '  if (msg.type === "init") {',
+    '    searchEntries = msg.entries;',
+    '    searchClauses = searchEntries.filter(function (entry) { return entry.type === "clause"; });',
+    '    return;',
+    '  }',
+    '  if (msg.type !== "search") return;',
+    '  var searchString = msg.searchString;',
+    '  var results;',
+    '  if (/^[\\d.]*$/.test(searchString)) {',
+    '    results = searchClauses',
+    '      .filter(function (clause) { return clause.number.substring(0, searchString.length) === searchString; })',
+    '      .map(function (clause) { return { key: getKey(clause), entry: clause }; });',
+    '  } else {',
+    '    results = [];',
+    '    for (var i = 0; i < searchEntries.length; i++) {',
+    '      var entry = searchEntries[i];',
+    '      var key = getKey(entry);',
+    '      if (!key) continue;',
+    '      var match = fuzzysearch(searchString, key);',
+    '      if (match) results.push({ key: key, entry: entry, match: match });',
+    '    }',
+    '    results.forEach(function (result) { result.relevance = relevance(result, searchString); });',
+    '    results.sort(function (a, b) { return b.relevance - a.relevance; });',
+    '  }',
+    '  if (results.length > 50) results = results.slice(0, 50);',
+    '  self.postMessage({ id: msg.id, results: results });',
+    '};',
+  ].join('\n');
+}
+
+function Menu() {

@@ -1,0 +1,290 @@
+/* ==== version-compare & impl-links widgets (extracted from fork css/elements.css) ==== */
+
+/* Version Compare Widget */
+.version-compare-btn {
+  font-size: 0.5em;
+  vertical-align: middle;
+  margin-left: 0.5em;
+  padding: 1px 6px;
+  border: 1px solid var(--control-border-color);
+  border-radius: 3px;
+  background: var(--control-background-color);
+  color: var(--control-link-foreground-color);
+  cursor: pointer;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: normal;
+  line-height: 1.4;
+}
+
+.version-compare-btn:hover {
+  background: var(--control-dark-background-color);
+}
+
+.version-compare-panel {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  z-index: 100;
+  background: var(--background-color);
+  border: 1px solid var(--control-border-color);
+  border-radius: 6px;
+  padding: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 340px;
+  font-size: 14px;
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+
+.version-compare-endpoints {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.version-compare-endpoint {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid var(--control-border-color);
+  border-radius: 3px;
+  background: var(--control-background-color);
+  color: var(--foreground-color);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  text-align: center;
+}
+
+.version-compare-endpoint:hover {
+  background: var(--control-dark-background-color);
+}
+
+.version-compare-endpoint.active {
+  border-color: var(--link-foreground-color);
+  background: var(--link-foreground-color);
+  color: #fff;
+}
+
+.version-compare-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.version-compare-cell {
+  padding: 4px 6px;
+  border: 1px solid var(--control-border-color);
+  border-radius: 3px;
+  background: var(--control-background-color);
+  color: var(--foreground-color);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  line-height: 1.2;
+}
+
+.version-compare-cell:hover {
+  background: var(--control-dark-background-color);
+}
+
+.version-compare-cell.selected-from {
+  background: var(--link-foreground-color);
+  color: #fff;
+  border-color: var(--link-foreground-color);
+}
+
+.version-compare-cell.selected-to {
+  background: var(--link-foreground-color);
+  color: #fff;
+  border-color: var(--link-foreground-color);
+}
+
+.version-compare-cell.in-range {
+  background: var(--highlight-background-color);
+}
+
+.version-compare-open-btn {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  border: 1px solid var(--link-foreground-color);
+  border-radius: 4px;
+  background: var(--link-foreground-color);
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  text-align: center;
+}
+
+.version-compare-open-btn:hover {
+  opacity: 0.9;
+}
+
+.version-compare-close-btn {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--foreground-color);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  line-height: 1;
+  opacity: 0.6;
+}
+
+.version-compare-close-btn:hover {
+  opacity: 1;
+}
+
+/* Implementation Links Widget */
+.impl-links-btn {
+  font-size: 0.5em;
+  vertical-align: middle;
+  margin-left: 0.5em;
+  padding: 1px 6px;
+  border: 1px solid var(--control-border-color);
+  border-radius: 3px;
+  background: var(--control-background-color);
+  color: var(--control-link-foreground-color);
+  cursor: pointer;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: normal;
+  line-height: 1.4;
+}
+
+.impl-links-btn:hover {
+  background: var(--control-dark-background-color);
+}
+
+.impl-links-panel {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  z-index: 100;
+  background: var(--background-color);
+  border: 1px solid var(--control-border-color);
+  border-radius: 6px;
+  padding: 10px 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 280px;
+  font-size: 14px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: normal;
+}
+
+.impl-links-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 3px 0;
+}
+
+.impl-links-engine {
+  flex: 0 0 10em;
+  color: var(--foreground-color);
+  white-space: nowrap;
+}
+
+.impl-links-engine-tag {
+  margin-left: 0.5em;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.impl-links-link {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.impl-links-alt {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-left: -6px;
+}
+
+/* ==== version-bar widget ==== */
+
+  --vb-border: #999;
+  --vb-bg: #e8e8e8;
+  --vb-fg: #333;
+  --vb-hover-bg: #d0d0d0;
+  --vb-selected-bg: #206ca7;
+  --vb-viewer-border: #ccc;
+  --vb-viewer-bg: #f8f8f8;
+
+      --vb-border: #555;
+      --vb-bg: #333;
+      --vb-fg: #ddd;
+      --vb-hover-bg: #444;
+      --vb-selected-bg: #2e7dc6;
+      --vb-viewer-border: #555;
+      --vb-viewer-bg: #222;
+
+/* Version Bar */
+.version-bar {
+  display: flex;
+  gap: 2px;
+  margin: 4px 0 8px 0;
+  padding: 2px;
+  flex-wrap: wrap;
+}
+
+.version-segment {
+  padding: 2px 6px;
+  font-size: 11px;
+  border: 1px solid var(--vb-border);
+  border-radius: 3px;
+  cursor: pointer;
+  background: var(--vb-bg);
+  color: var(--vb-fg);
+  user-select: none;
+  line-height: 1.2;
+}
+
+.version-segment:hover {
+  background: var(--vb-hover-bg);
+}
+
+.version-segment.selected {
+  background: var(--vb-selected-bg);
+  color: #fff;
+}
+
+.version-segment--absent {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.version-segment--absent:hover {
+  background: var(--vb-bg);
+}
+
+.version-viewer {
+  border: 1px solid var(--vb-viewer-border);
+  background: var(--vb-viewer-bg);
+  margin: 8px 0;
+  padding: 12px;
+  border-radius: 4px;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.version-viewer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-weight: bold;
+}
+
+.version-viewer-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: inherit;
+}
