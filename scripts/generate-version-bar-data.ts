@@ -13,9 +13,19 @@
  * 2. Fetches each version's HTML (with disk cache in .version-cache/)
  * 3. Parses sections from each version using parse5
  * 4. Optionally reads oldids from the current spec to map renamed section IDs
- * 5. Outputs:
- *    - version-bar-manifest.json (version list + which sections exist in which versions)
- *    - version-bar-data/<section-id>.json (HTML content per version per section)
+ * 5. Splits each section's sanitized HTML into leaf blocks (lib/section-blocks.mjs)
+ *    and chains diffs across editions (lib/version-data.mjs + assets/versionBarCore.js)
+ *    to compute per-version diff stats and per-block blame
+ * 6. Outputs (schema v2):
+ *    - version-bar-manifest.json:
+ *      { schemaVersion: 2, versions, sections: { [id]: { presentIn, stats } } }
+ *      where stats[versionKey] = [addedBlocks, deletedBlocks] vs the previous
+ *      present version ([0,0] for sections already present in the first edition,
+ *      [blocks.length, 0] for sections first appearing mid-history)
+ *    - version-bar-data/<section-id>.json:
+ *      { schemaVersion: 2, versions: { [key]: { skeleton, blocks, keys, blame } } }
+ *      (present versions only; skeleton uses <!--vb:N--> markers, blame[i] is the
+ *      global index into manifest.versions of the edition that introduced blocks[i])
  */
 
 import * as fs from 'fs';
@@ -25,11 +35,41 @@ import * as path from 'path';
 // garbage-collected. jsdom itself parses and serializes through parse5, so the
 // serialized output is identical to the previous jsdom-based implementation.
 import { parse, serialize } from 'parse5';
+import { pathToFileURL } from 'url';
 
-// Manifest shape consumed by lib/inject-widgets.mjs and the versionBar.js client.
+// A single diff operation from versionBarCore's diffSequences.
+interface DiffOp {
+  type: 'same' | 'add' | 'del';
+  ai: number;
+  bi: number;
+}
+
+// Shared diff core (UMD-lite). This script runs under tsx's CJS mode
+// (__dirname is used throughout), so a plain require works.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { diffSequences } = require('../assets/versionBarCore.js') as {
+  diffSequences: (aKeys: string[], bKeys: string[], opts?: { maxCells?: number }) => DiffOp[];
+};
+
+// Output of lib/section-blocks.mjs' splitSectionHtml.
+interface SectionSplit {
+  skeleton: string;
+  blocks: string[];
+  keys: string[];
+}
+
+// Per-version payload of the v2 per-section JSON files.
+interface SectionVersionData extends SectionSplit {
+  blame: number[];
+}
+
+// Manifest shape (schema v2) consumed by lib/inject-widgets.mjs and the
+// versionBar.js client. stats[versionKey] = [added, deleted] block counts vs
+// the previous present version (present versions only).
 interface VersionBarManifest {
+  schemaVersion: 2;
   versions: { key: string; label: string }[];
-  sections: Record<string, { presentIn: string[] }>;
+  sections: Record<string, { presentIn: string[]; stats: Record<string, [number, number]> }>;
 }
 
 interface VersionConfig {
@@ -127,6 +167,11 @@ function isJavascriptUrl(value: string): boolean {
  * sanitized here, at write time, so that only already-safe HTML crosses the
  * boundary. This removes active-content elements, event-handler attributes, and
  * `javascript:` URLs.
+ *
+ * It also removes ALL comment nodes: the block-splitting step
+ * (lib/section-blocks.mjs) marks leaf blocks with `<!--vb:N-->` comment markers
+ * in its skeletons, so no comment from the input may survive to collide with —
+ * or spoof — those markers. splitSectionHtml fails loudly if one ever does.
  */
 // Elements that can execute code or load external resources.
 const DANGEROUS_ELEMENTS = [
@@ -188,9 +233,13 @@ export function sanitizeSectionHtml(html: string): string {
 
   const sanitizeNode = (node: P5Node) => {
     if (node.childNodes) {
-      // Remove elements that can execute code or load external resources.
+      // Remove elements that can execute code or load external resources, and
+      // every comment node (see the trust-boundary note above: the skeleton
+      // format reserves <!--vb:N--> comment markers).
       node.childNodes = node.childNodes.filter(
-        child => !(child.tagName != null && DANGEROUS_ELEMENTS.includes(child.tagName)),
+        child =>
+          child.nodeName !== '#comment' &&
+          !(child.tagName != null && DANGEROUS_ELEMENTS.includes(child.tagName)),
       );
       for (const child of node.childNodes) {
         sanitizeNode(child);
@@ -419,67 +468,108 @@ async function main(args: Args) {
     }
   }
 
-  // Build manifest
+  // Shared block-splitting / diff-chaining modules. These are ESM (.mjs) while
+  // this script runs under tsx's CJS mode, so load them via dynamic import with
+  // explicit file: URLs (tsx resolves the CJS -> ESM boundary).
+  const { splitSectionHtml } = (await import(
+    pathToFileURL(path.join(__dirname, '..', 'lib', 'section-blocks.mjs')).href
+  )) as { splitSectionHtml: (sanitizedHtml: string) => SectionSplit };
+  const { computeVersionData } = (await import(
+    pathToFileURL(path.join(__dirname, '..', 'lib', 'version-data.mjs')).href
+  )) as {
+    computeVersionData: (
+      orderedPresentKeys: string[],
+      splitByKey: Map<string, SectionSplit>,
+      versionIndexByKey: Map<string, number>,
+      firstVersionKey: string,
+      diff: typeof diffSequences,
+    ) => { perVersion: Record<string, SectionVersionData>; stats: Record<string, [number, number]> };
+  };
+
+  // Memoize splitting on the content string itself: oldid resolution can make
+  // several section ids point at the same content of the same edition, and
+  // content that does not change between editions is byte-identical, so a
+  // content-keyed cache avoids re-parsing both cases.
+  const splitCache = new Map<string, SectionSplit>();
+  const splitMemoized = (content: string): SectionSplit => {
+    let split = splitCache.get(content);
+    if (split === undefined) {
+      split = splitSectionHtml(content);
+      splitCache.set(content, split);
+    }
+    return split;
+  };
+
+  const versionIndexByKey = new Map<string, number>(config.versions.map((v, i) => [v.key, i]));
+  const firstVersionKey = config.versions[0].key;
+
+  // Build manifest skeleton; per-section stats are filled in by the loop below.
   const manifest: VersionBarManifest = {
+    schemaVersion: 2,
     versions: config.versions.map(v => ({ key: v.key, label: v.label })),
     sections: {},
   };
 
-  for (const sectionId of [...allSectionIds].sort()) {
-    const presentIn: string[] = [];
-    for (const version of config.versions) {
-      // O(1) lookup: presence in the reverse index == the old
-      // `sections.has(sectionId) || keys.some(id => resolveId(id) === sectionId)` test.
-      if (versionResolved.get(version.key)!.has(sectionId)) {
-        presentIn.push(version.key);
-      }
-    }
-    if (presentIn.length > 0) {
-      manifest.sections[sectionId] = { presentIn };
-    }
-  }
-
-  // Write output
+  // Prepare output directories
   fs.mkdirSync(outDir, { recursive: true });
   const dataDir = path.join(outDir, 'version-bar-data');
   fs.mkdirSync(dataDir, { recursive: true });
   const resolvedDataDir = path.resolve(dataDir);
 
-  // Write manifest
+  // Per section: collect present versions (config order, oldest -> newest),
+  // split each present version's sanitized content into blocks, chain diffs
+  // for stats + blame, and write the v2 per-section detail file.
+  console.log('Splitting sections into blocks and computing diff stats...');
+  let sectionFileCount = 0;
+  for (const sectionId of [...allSectionIds].sort()) {
+    const presentIn: string[] = [];
+    const splitByKey = new Map<string, SectionSplit>();
+    for (const version of config.versions) {
+      // O(1) lookup: presence in the reverse index == the old
+      // `sections.has(sectionId) || keys.some(id => resolveId(id) === sectionId)` test.
+      const content = versionResolved.get(version.key)!.get(sectionId);
+      if (content != null) {
+        presentIn.push(version.key);
+        splitByKey.set(version.key, splitMemoized(content));
+      }
+    }
+    if (presentIn.length === 0) continue;
+
+    const { perVersion, stats } = computeVersionData(
+      presentIn,
+      splitByKey,
+      versionIndexByKey,
+      firstVersionKey,
+      diffSequences,
+    );
+
+    manifest.sections[sectionId] = { presentIn, stats };
+
+    // Trust boundary: the fragments inside perVersion were sanitized at
+    // extraction time (extractAndSanitizeVersion); the client reassembles
+    // skeleton + blocks via innerHTML without further sanitization.
+    //
+    // Use the shared, percent-encoded file name so it matches the client's fetch URL
+    // and cannot contain path separators.
+    const sectionPath = path.join(dataDir, sectionFileName(sectionId));
+    // Belt-and-suspenders: ensure the resolved path stays directly inside dataDir.
+    const resolved = path.resolve(sectionPath);
+    if (path.dirname(resolved) !== resolvedDataDir) {
+      console.warn(`  [skip] Refusing to write section outside data dir: ${sectionId}`);
+      continue;
+    }
+    fs.writeFileSync(
+      sectionPath,
+      JSON.stringify({ schemaVersion: 2, versions: perVersion }),
+      'utf-8',
+    );
+    sectionFileCount++;
+  }
+
+  // Write manifest (after the loop, which fills in per-section stats)
   const manifestPath = path.join(outDir, 'version-bar-manifest.json');
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
   console.log(`Wrote manifest: ${manifestPath} (${Object.keys(manifest.sections).length} sections)`);
-
-  // Write per-section detail files
-  let sectionFileCount = 0;
-  for (const sectionId of allSectionIds) {
-    const sectionData: Record<string, string> = {};
-
-    for (const version of config.versions) {
-      // O(1) lookup via the reverse index (was an O(n) scan per version).
-      const content = versionResolved.get(version.key)!.get(sectionId);
-      if (content) {
-        // Trust boundary: these fragments were already sanitized at extraction
-        // time (extractAndSanitizeVersion); the client inserts them via
-        // innerHTML without further sanitization.
-        sectionData[version.key] = content;
-      }
-    }
-
-    if (Object.keys(sectionData).length > 0) {
-      // Use the shared, percent-encoded file name so it matches the client's fetch URL
-      // and cannot contain path separators.
-      const sectionPath = path.join(dataDir, sectionFileName(sectionId));
-      // Belt-and-suspenders: ensure the resolved path stays directly inside dataDir.
-      const resolved = path.resolve(sectionPath);
-      if (path.dirname(resolved) !== resolvedDataDir) {
-        console.warn(`  [skip] Refusing to write section outside data dir: ${sectionId}`);
-        continue;
-      }
-      fs.writeFileSync(sectionPath, JSON.stringify(sectionData), 'utf-8');
-      sectionFileCount++;
-    }
-  }
 
   console.log(`Wrote ${sectionFileCount} section detail files to ${dataDir}`);
   // Report the peak rss so memory regressions are visible in the build log
