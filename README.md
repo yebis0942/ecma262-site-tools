@@ -46,6 +46,11 @@ manifest とセクション別 JSON を出力する。ES2016+ は `emu-clause`�
 ES2015 は旧形式 `<section id="sec-*">` にフォールバックして抽出する。
 保存前にサニタイズ済み（クライアントは innerHTML で挿入するため）。
 
+生成データはスキーマ v2（`schemaVersion: 2`）: 各節をブロック分割した
+skeleton + blocks に加え、版間 diff 統計と blame（各ブロックの導入版）を含む。
+**旧スキーマのデータは build 時に fail-loud で拒否される**ので、
+本ツール更新後は再生成が必要。
+
 ## アーキテクチャ
 
 ```
@@ -56,7 +61,7 @@ ecmarkup.build()  ──(utils.readFile フック: menu.js ソースにパッチ
      - manifest に載っている各 clause の <h1> 直後に .version-bar
      - <head> に widgets.css / 設定インライン script / ウィジェット script (defer)
      - パスはページごとに相対計算 (multipage サブページ対応)
-  2. アセット追加 (widgets.css, versionBar/versionCompare/implLinks.js,
+  2. アセット追加 (widgets.css, versionBarCore/versionBar/versionCompare/implLinks.js,
      version-bar-data/, impl-links.json)
   3. 書き出し
 ```
@@ -66,7 +71,11 @@ ecmarkup.build()  ──(utils.readFile フック: menu.js ソースにパッチ
 ecmarkup の**出力**（`emu-clause[id]` と h1 という文書構造）にのみ依存し、
 内部実装には依存しない。
 
-- **version-bar** — 各節がどの版に存在するかのバー + クリックで当該版の内容をインライン表示
+- **version-bar** — 各節の版ごとの変更量を棒グラフで示すバー。クリックで当該版の
+  内容表示（blame トグルで各ブロックの導入版を色分け）、範囲選択で版間 diff
+  （unified / side-by-side）。ブロック分割・diff 統計・blame はビルド時に事前計算し、
+  クライアントは fetch した分割済みデータを表示するだけ（ビルドとクライアントの
+  parse 一致問題を回避し、バー統計とパネル diff の不一致も原理的に排除）
 - **version-compare** — ecma262-compare へのリンクボタン（外部 releases.json + 内蔵フォールバック）
 - **impl-links** — エンジン実装 (V8/SM/JSC/QJS) へのリンク（`data/impl-links.json`、`scripts/impl-links/` で再生成）
 
