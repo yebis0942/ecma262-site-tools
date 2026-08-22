@@ -54,29 +54,34 @@ try {
   const js = fs.readFileSync(path.join(outDir, 'assets', 'js', 'ecmarkup.js'), 'utf8');
 
   // --- widget injection -----------------------------------------------------
-  assert(html.includes('class="version-bar" data-section-id="sec-test"'), 'version bar for sec-test');
-  assert(html.includes('data-section-id="sec-test-child"') === false, 'no bar for unlisted child');
-  assert(html.replace(/\n/g, '').includes('</h1><div class="version-bar"'), 'bar directly after h1');
-  assert(html.includes('version-segment--absent'), 'absent segment rendered');
-  assert(html.includes('data-add="2" data-del="1"'), 'diff stats baked into segment');
-  assert(html.includes('data-index='), 'version index baked into segment');
+  // The bar is built by the client now; the page carries only the stats.
+  assert(!html.includes('class="version-bar"'), 'no bar baked into the page');
+  assert(!html.includes('version-segment'), 'no segments baked into the page');
 
-  // embedded config: versions only — sections stay out of every page
+  // embedded config: manifest versions + this page's per-section stats
   const inlineStart = html.indexOf('let versionBarManifest = ');
   assert(inlineStart !== -1, 'manifest embedded');
   const inline = html.slice(inlineStart, html.indexOf('</script>', inlineStart));
   assert(inline.startsWith('let versionBarManifest = {"versions":'), 'embedded manifest is versions-only');
-  assert(!inline.includes('"sections"'), 'sections not embedded in pages');
+  assert(!inline.includes('"sections"'), 'full section list stays out of pages');
+  assert(
+    inline.includes('let versionBarSections = {"sec-test":[null,[2,1]]}'),
+    'per-section stats embedded, aligned to versions, null where absent',
+  );
+  assert(!inline.includes('sec-test-child'), 'no stats for a clause the manifest omits');
   assert(html.includes('let versionBarDataDir = "assets"'), 'data dir points at assets/');
   assert(!html.includes('</script><script>alert'), 'script breakout escaped');
 
   assert(html.includes('assets/css/widgets.css'), 'widgets.css linked');
   const coreTagIdx = html.indexOf('assets/js/versionBarCore.js');
   const barTagIdx = html.indexOf('assets/js/versionBar.js');
+  const compareTagIdx = html.indexOf('assets/js/versionCompare.js');
   assert(coreTagIdx !== -1, 'versionBarCore.js script tag');
   assert(barTagIdx !== -1, 'versionBar.js script tag');
-  assert(coreTagIdx < barTagIdx, 'versionBarCore.js tag before versionBar.js (defer runs in order)');
-  assert(html.includes('assets/js/versionCompare.js'), 'versionCompare.js script tag');
+  assert(compareTagIdx !== -1, 'versionCompare.js script tag');
+  // defer runs in declaration order, and versionBar.js needs both of them
+  assert(coreTagIdx < barTagIdx, 'versionBarCore.js tag before versionBar.js');
+  assert(compareTagIdx < barTagIdx, 'versionCompare.js tag before versionBar.js');
   assert(html.includes('assets/js/implLinks.js'), 'implLinks.js script tag');
   assert(html.includes('window.implLinksDataUrl = "impl-links.json"'), 'implLinks data url');
 
@@ -93,24 +98,33 @@ try {
   }
 
   // --- hostile section id ---------------------------------------------------
-  // The fixture spec has no clause with the hostile id, so exercise the bar
-  // markup for it via injectIntoHtml directly: the id must land only inside a
-  // quoted attribute value (safe — the tokenizer does not recognize </script>
-  // there), never inside the inline config script.
+  // Section ids now reach the inline config script as object keys, so the
+  // </script> breakout escaping in escapeForScript is what keeps them inside
+  // the string literal. Exercise it via injectIntoHtml directly (the fixture
+  // spec has no clause with the hostile id).
   const hostileHtml = injectIntoHtml(
     '<!DOCTYPE html><html><head><title>t</title></head><body>' +
       '<emu-clause id="&lt;/script&gt;&lt;script&gt;alert(1)&lt;/script&gt;">' +
       '<h1>Hostile</h1><p>x</p></emu-clause></body></html>',
     { relAssets: 'assets', relRoot: '', versionBar: { manifest }, implLinks: false },
   );
-  assert(
-    hostileHtml.includes(`data-section-id="${HOSTILE_ID}"`),
-    'hostile id confined to a quoted attribute value',
-  );
   const hStart = hostileHtml.indexOf('let versionBarManifest');
   assert(hStart !== -1, 'hostile page still gets embedded manifest');
   const hInline = hostileHtml.slice(hStart, hostileHtml.indexOf('</script>', hStart));
-  assert(!hInline.includes('alert(1)'), 'hostile id never reaches the inline script');
+  assert(hInline.includes('versionBarSections'), 'hostile page carries its stats');
+  assert(!/[<>]/.test(hInline), 'no raw angle bracket survives in the inline script');
+  assert(
+    hInline.includes('\\u003c/script\\u003e\\u003cscript\\u003ealert(1)'),
+    'hostile id escaped into the string literal rather than dropped',
+  );
+  // The escaped source must still parse as JS, with the id preserved verbatim.
+  const hostileCheck = path.join(tmp, 'hostile-config.js');
+  fs.writeFileSync(hostileCheck, hInline);
+  execFileSync(process.execPath, ['--check', hostileCheck]);
+  const hostileKeys = Object.keys(
+    new Function(hInline + '; return versionBarSections;')(),
+  );
+  assert(hostileKeys.includes(HOSTILE_ID), 'hostile id round-trips through the inline script');
 
   // --- v1 manifest rejected fail-loud ---------------------------------------
   const v1Dir = path.join(tmp, 'vb-v1');

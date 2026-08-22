@@ -1,14 +1,21 @@
 'use strict';
 
-/* global versionBarManifest, versionBarDataDir */
+/* global versionBarManifest, versionBarSections, versionBarDataDir */
 
 // Version Bar — rich version-history UI for spec sections.
 //
-// The static bar (stacked add/del bars + version numbers) is baked into the
-// page at build time by lib/inject-widgets.mjs; this script only adds the
-// interactive layer: range selection (drag handles / range drag / cell snap),
-// single-version view with Blame, and pair view with unified / side-by-side
-// diff. Requires `versionBarManifest` ({ versions: [{key, label}] }) and
+// The bar is collapsed by default: every listed clause gets a `versions`
+// button in its <h1>, and the bar is built on demand from the per-section
+// [added, deleted] stats the build embeds in `versionBarSections`. Opening it
+// gives range selection (drag handles / range drag / cell snap), a
+// single-version view with Blame, a pair view with unified / side-by-side
+// diff, and a link into ecma262-compare for the selected pair.
+//
+// "Show every bar" is a remembered preference (localStorage): when set, all
+// bars are built at load, which needs no fetch because the stats are inline.
+//
+// Requires `versionBarManifest` ({ versions: [{key, label}] }),
+// `versionBarSections` ({ sectionId: ([add, del] | null)[] }) and
 // `versionBarDataDir` to be defined before this script runs (injected by the
 // build), plus assets/versionBarCore.js loaded via an earlier `<script defer>`.
 
@@ -28,6 +35,15 @@
 
   const manifest = versionBarManifest;
   const dataDir = typeof versionBarDataDir === 'string' ? versionBarDataDir : '';
+  const sections =
+    typeof versionBarSections === 'object' && versionBarSections !== null
+      ? versionBarSections
+      : {};
+
+  // Maximum bar-graph height in px (the bar track is 32px tall in CSS).
+  const BAR_MAX_HEIGHT = 28;
+
+  const SHOW_ALL_KEY = 'ecma262-plus:version-bar:show-all';
 
   // Cache for fetched per-section data: sectionId -> Promise<v2 data>.
   // Caching the promise (not the value) collapses concurrent renders of the
@@ -83,6 +99,212 @@
     const tpl = document.createElement('template');
     tpl.innerHTML = typeof html === 'string' ? html : '';
     parent.appendChild(tpl.content);
+  }
+
+  // ── preference ───────────────────────────────────────────────────────────
+
+  // localStorage can throw outright (private mode, site data blocked), so both
+  // reads and writes are guarded and a failure just means "not remembered".
+  function readShowAll() {
+    try {
+      return localStorage.getItem(SHOW_ALL_KEY) === '1';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function writeShowAll(on) {
+    try {
+      localStorage.setItem(SHOW_ALL_KEY, on ? '1' : '0');
+    } catch (e) {
+      // Preference simply is not remembered.
+    }
+  }
+
+  // ── bar construction ─────────────────────────────────────────────────────
+
+  // "es6" -> "6"; fall back to the whole key for unexpected shapes.
+  function editionNumber(key) {
+    const match = /^es(.+)$/.exec(key);
+    return match ? match[1] : key;
+  }
+
+  function labelForKey(key) {
+    for (let i = 0; i < manifest.versions.length; i++) {
+      if (manifest.versions[i].key === key) return manifest.versions[i].label;
+    }
+    return key;
+  }
+
+  // Build the bar for one section from its per-version stats (null = the
+  // section is absent from that edition). Bar heights are scaled to the
+  // section's own busiest edition, so each bar is a within-section comparison.
+  function buildBar(sectionId, stats) {
+    const bar = document.createElement('div');
+    bar.className = 'version-bar';
+    bar.setAttribute('data-section-id', sectionId);
+    const row = document.createElement('div');
+    row.className = 'vb-row';
+
+    let maxTotal = 0;
+    for (let i = 0; i < stats.length; i++) {
+      if (stats[i]) maxTotal = Math.max(maxTotal, stats[i][0] + stats[i][1]);
+    }
+
+    for (let i = 0; i < manifest.versions.length; i++) {
+      const version = manifest.versions[i];
+      const entry = stats[i] || null;
+      const segment = document.createElement('button');
+      segment.type = 'button';
+      segment.className = entry
+        ? 'version-segment'
+        : 'version-segment version-segment--absent';
+      segment.setAttribute('data-version', version.key);
+      segment.setAttribute('data-index', String(i));
+
+      const track = document.createElement('span');
+      track.className = 'vb-bar';
+      if (entry) {
+        const add = entry[0];
+        const del = entry[1];
+        segment.setAttribute('data-add', String(add));
+        segment.setAttribute('data-del', String(del));
+        const total = add + del;
+        if (total === 0) {
+          const flat = document.createElement('span');
+          flat.className = 'vb-bar-flat';
+          track.appendChild(flat);
+        } else {
+          const barH = maxTotal > 0 ? Math.round((total / maxTotal) * BAR_MAX_HEIGHT) : 0;
+          const addH = Math.round((add / total) * barH);
+          const addEl = document.createElement('span');
+          addEl.className = 'vb-bar-add';
+          addEl.style.height = addH + 'px';
+          const delEl = document.createElement('span');
+          delEl.className = 'vb-bar-del';
+          delEl.style.height = barH - addH + 'px';
+          track.appendChild(addEl);
+          track.appendChild(delEl);
+        }
+        segment.title = version.label + ' — +' + add + ' / −' + del;
+      } else {
+        segment.title = version.label + ' — not present in this version';
+      }
+
+      const num = document.createElement('span');
+      num.className = 'vb-num';
+      num.textContent = editionNumber(version.key);
+
+      segment.appendChild(track);
+      segment.appendChild(num);
+      row.appendChild(segment);
+    }
+
+    bar.appendChild(row);
+    return bar;
+  }
+
+  // ── collapse / expand ────────────────────────────────────────────────────
+
+  // The clause's own <h1>: the first one that is not inside a nested section.
+  function ownHeader(clause) {
+    const headers = clause.getElementsByTagName('h1');
+    for (let i = 0; i < headers.length; i++) {
+      if (headers[i].closest('emu-clause, emu-annex') === clause) return headers[i];
+    }
+    return null;
+  }
+
+  function barFor(clause) {
+    const h1 = ownHeader(clause);
+    const next = h1 ? h1.nextElementSibling : null;
+    return next && next.classList.contains('version-bar') ? next : null;
+  }
+
+  function setToggleState(clause, open) {
+    const h1 = ownHeader(clause);
+    const button = h1 ? h1.querySelector('.vb-toggle-btn') : null;
+    if (!button) return;
+    button.setAttribute('aria-expanded', open ? 'true' : 'false');
+    button.classList.toggle('on', open);
+  }
+
+  function expand(clause) {
+    if (barFor(clause)) return;
+    const sectionId = clause.getAttribute('id');
+    const stats = sections[sectionId];
+    const h1 = ownHeader(clause);
+    if (!stats || !h1) return;
+    h1.after(buildBar(sectionId, stats));
+    setToggleState(clause, true);
+  }
+
+  function collapse(clause) {
+    const bar = barFor(clause);
+    if (!bar) return;
+    deactivate(bar); // drops the slider, controls and the viewer sibling
+    bar.remove();
+    setToggleState(clause, false);
+  }
+
+  function eachListedClause(visit) {
+    const clauses = document.querySelectorAll('emu-clause[id], emu-annex[id]');
+    for (let i = 0; i < clauses.length; i++) {
+      if (sections[clauses[i].getAttribute('id')]) visit(clauses[i]);
+    }
+  }
+
+  function attachToggles() {
+    eachListedClause(clause => {
+      const h1 = ownHeader(clause);
+      if (!h1 || h1.querySelector('.vb-toggle-btn')) return;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'vb-toggle-btn';
+      button.textContent = 'versions';
+      button.title = "Show this section's edition history";
+      button.setAttribute('aria-expanded', 'false');
+      h1.appendChild(button);
+    });
+  }
+
+  let showAllObserver = null;
+
+  // Apply the "show every bar" preference. No network is involved either way:
+  // the stats are already inline. `keep` is the clause the user is currently
+  // reading (the switch lives in its panel), which stays open when the
+  // preference is turned off — collapsing it under the pointer would throw
+  // away the panel they are looking at.
+  function applyShowAll(on, keep) {
+    if (showAllObserver) {
+      showAllObserver.disconnect();
+      showAllObserver = null;
+    }
+    if (!on) {
+      eachListedClause(clause => {
+        if (clause !== keep) collapse(clause);
+      });
+      return;
+    }
+    // The single-page build lists every section, so expanding all of them up
+    // front would build tens of thousands of nodes in one go. Materialize each
+    // bar as its clause approaches the viewport instead, and stop watching it
+    // once built (so a manual collapse stays collapsed).
+    if (typeof IntersectionObserver !== 'function') {
+      eachListedClause(expand);
+      return;
+    }
+    showAllObserver = new IntersectionObserver(
+      entries => {
+        for (let i = 0; i < entries.length; i++) {
+          if (!entries[i].isIntersecting) continue;
+          expand(entries[i].target);
+          if (showAllObserver) showAllObserver.unobserve(entries[i].target);
+        }
+      },
+      { rootMargin: '400px 0px' },
+    );
+    eachListedClause(clause => showAllObserver.observe(clause));
   }
 
   // ── activation / teardown ────────────────────────────────────────────────
@@ -207,22 +429,47 @@
     range.addEventListener('pointercancel', endDrag);
   }
 
-  // Controls row: info text, one mode toggle (Blame or Side-by-Side), close.
+  // Controls row: info text, one mode toggle (Blame or Side-by-Side), the
+  // ecma262-compare link, the "show every bar" preference, close. The mode
+  // toggle is inserted by updateControls just before the compare button.
   function buildControls(bar, state) {
     const controls = document.createElement('div');
     controls.className = 'vb-controls';
+
     const info = document.createElement('span');
     info.className = 'vb-info';
+
+    const compare = document.createElement('button');
+    compare.type = 'button';
+    compare.className = 'vb-compare-btn';
+    compare.textContent = 'ecma262-compare';
+
+    const pref = buildSwitch('showall', '全節で表示', 'vb-switch-pref');
+    pref.classList.toggle('on', readShowAll());
+
     const close = document.createElement('button');
     close.type = 'button';
     close.className = 'vb-close';
     close.textContent = '✕';
     close.setAttribute('aria-label', 'Close');
+
     controls.appendChild(info);
+    controls.appendChild(compare);
+    controls.appendChild(pref);
     controls.appendChild(close);
     bar.appendChild(controls);
     state.controls = controls;
     state.info = info;
+    state.compareBtn = compare;
+  }
+
+  // ecma262-compare needs a commit hash per edition, which assets/
+  // versionCompare.js resolves (releases.json, with a baked-in fallback). Its
+  // list starts at ES2016, so a range with an ES2015 endpoint has no URL.
+  function compareUrlFor(baseKey, headKey, sectionId) {
+    const releases = typeof self !== 'undefined' ? self.versionCompareReleases : null;
+    if (!releases || typeof releases.compareUrl !== 'function' || !sectionId) return null;
+    return releases.compareUrl(labelForKey(baseKey), labelForKey(headKey), sectionId);
   }
 
   // Content panel below the bar; reuses the existing viewer class names.
@@ -286,14 +533,14 @@
 
     const baseKey = segments[lo].getAttribute('data-version') || '';
     const headKey = segments[hi].getAttribute('data-version') || '';
-    updateControls(state, single, baseKey, headKey);
+    updateControls(bar, state, single, baseKey, headKey);
     renderContent(bar, state, { lo, hi, single, segments, baseKey, headKey });
   }
 
   // Info text and mode toggle. The toggle element is kept across renders of
   // the same mode so its thumb transition animates; it is swapped only on a
   // single<->pair transition. Text goes through textContent, never innerHTML.
-  function updateControls(state, single, baseKey, headKey) {
+  function updateControls(bar, state, single, baseKey, headKey) {
     const info = state.info;
     info.textContent = '';
     const strongBase = document.createElement('strong');
@@ -310,22 +557,33 @@
     }
 
     const want = single ? 'blame' : 'sbs';
-    let sw = state.controls.querySelector('.vb-switch');
+    let sw = state.controls.querySelector('.vb-switch-mode');
     if (sw && sw.getAttribute('data-toggle') !== want) {
       sw.remove();
       sw = null;
     }
     if (!sw) {
-      sw = buildSwitch(want, single ? 'Blame' : 'Side-by-Side');
-      state.controls.insertBefore(sw, state.controls.querySelector('.vb-close'));
+      sw = buildSwitch(want, single ? 'Blame' : 'Side-by-Side', 'vb-switch-mode');
+      state.controls.insertBefore(sw, state.compareBtn);
     }
     sw.classList.toggle('on', single ? state.blameOn : state.sbsOn);
+
+    // A single edition is a content view, not a diff, so there is nothing to
+    // hand to ecma262-compare; the button stays visible but inert.
+    const url = single ? null : compareUrlFor(baseKey, headKey, bar.getAttribute('data-section-id'));
+    state.compareUrl = url;
+    state.compareBtn.disabled = !url;
+    state.compareBtn.title = url
+      ? labelForKey(baseKey) + ' → ' + labelForKey(headKey) + ' を ecma262-compare で開く'
+      : single
+        ? '2つの版を選ぶと ecma262-compare で開けます'
+        : 'この範囲は ecma262-compare の対象外です（ES2015 には対応する境界がありません）';
   }
 
-  function buildSwitch(kind, label) {
+  function buildSwitch(kind, label, extraClass) {
     const sw = document.createElement('button');
     sw.type = 'button';
-    sw.className = 'vb-switch';
+    sw.className = extraClass ? 'vb-switch ' + extraClass : 'vb-switch';
     sw.setAttribute('data-toggle', kind);
     const track = document.createElement('span');
     track.className = 'vb-switch-track';
@@ -609,11 +867,39 @@
 
   // ── event wiring ─────────────────────────────────────────────────────────
 
+  // Re-sync the controls of every open bar (the compare link can only be
+  // resolved once versionCompare.js has its release hashes). render() rebuilds
+  // the controls unconditionally and the content render is memoized, so this
+  // costs nothing beyond the controls.
+  function refreshOpenControls() {
+    const bars = document.querySelectorAll('.version-bar');
+    for (let i = 0; i < bars.length; i++) {
+      if (stateByBar.get(bars[i])) render(bars[i]);
+    }
+  }
+
   // Single delegated click listener for every bar on the page. Absent
   // segments are clickable too — the panel shows a not-present message.
   function handleDocumentClick(event) {
     const target = event.target;
     if (!target || !target.closest) return;
+
+    const toggle = target.closest('.vb-toggle-btn');
+    if (toggle) {
+      const clause = toggle.closest('emu-clause, emu-annex');
+      if (!clause) return;
+      if (barFor(clause)) collapse(clause);
+      else expand(clause);
+      return;
+    }
+
+    const compare = target.closest('.vb-compare-btn');
+    if (compare) {
+      const bar = compare.closest('.version-bar');
+      const state = bar ? stateByBar.get(bar) : undefined;
+      if (state && state.compareUrl) window.open(state.compareUrl, '_blank');
+      return;
+    }
 
     const close = target.closest('.vb-close');
     if (close) {
@@ -624,6 +910,17 @@
 
     const sw = target.closest('.vb-switch');
     if (sw) {
+      // The preference switch is not per-bar: it flips every bar on the page
+      // and is remembered for later visits.
+      if (sw.getAttribute('data-toggle') === 'showall') {
+        const on = !readShowAll();
+        writeShowAll(on);
+        const current = sw.closest('emu-clause, emu-annex');
+        applyShowAll(on, current);
+        const prefSwitches = document.querySelectorAll('.vb-switch-pref');
+        for (let i = 0; i < prefSwitches.length; i++) prefSwitches[i].classList.toggle('on', on);
+        return;
+      }
       const bar = sw.closest('.version-bar');
       const state = bar ? stateByBar.get(bar) : undefined;
       if (!state) return;
@@ -651,8 +948,22 @@
     }
   }
 
+  function subscribeToReleases() {
+    const releases = typeof self !== 'undefined' ? self.versionCompareReleases : null;
+    if (!releases || typeof releases.subscribe !== 'function') return false;
+    releases.subscribe(refreshOpenControls);
+    return true;
+  }
+
   function init() {
     document.addEventListener('click', handleDocumentClick);
+    attachToggles();
+    if (readShowAll()) applyShowAll(true);
+    // versionCompare.js is a later <script defer>, so it may not have run yet
+    // when a defer-time init() happens; retry once the document is parsed.
+    if (!subscribeToReleases()) {
+      document.addEventListener('DOMContentLoaded', subscribeToReleases);
+    }
   }
 
   // Run immediately if the DOM is already parsed (e.g. deferred or dynamically
