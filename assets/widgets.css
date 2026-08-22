@@ -95,6 +95,14 @@
 /* ==== version-bar widget ==== */
 
 :root {
+  /* Chart geometry. --vb-cell is the pitch: the bar plus the 1px of air on
+     each side that separates it from its neighbour. The row and the slider are
+     both sized to --vb-count * --vb-cell (assets/versionBar.js sets --vb-count
+     per bar), which is what keeps the slider's percentage positions lined up
+     with the cells — and, with no gap in play, exactly so. */
+  --vb-bar-w: 14px;
+  --vb-cell: 16px;
+
   --vb-border: #d4d0c8;
   --vb-bg: #fff;
   --vb-fg: #333;
@@ -182,7 +190,7 @@
 .vb-row {
   display: flex;
   align-items: flex-end;
-  gap: 3px;
+  width: calc(var(--vb-count, 11) * var(--vb-cell));
 }
 
 /* Segment cells are buttons; reset chrome and lay out bar over number */
@@ -193,8 +201,7 @@
   color: var(--vb-fg);
   padding: 0;
   margin: 0;
-  flex: 1;
-  min-width: 0;
+  flex: 0 0 var(--vb-cell);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -226,7 +233,7 @@
 
 /* Stacked add/del bar track */
 .vb-bar {
-  width: 14px;
+  width: var(--vb-bar-w);
   height: 32px;
   display: flex;
   flex-direction: column;
@@ -262,7 +269,7 @@
   font-size: 10px;
   font-weight: 700;
   margin-top: 3px;
-  padding: 1px 4px;
+  padding: 1px;
   border-radius: 3px;
   line-height: 1.3;
   transition: background 0.2s, color 0.2s;
@@ -278,6 +285,9 @@
   position: relative;
   height: 20px;
   margin: 6px 0 2px;
+  /* Same width as .vb-row: render() places the range and handles as
+     percentages of this element, so a mismatch puts them off the chart. */
+  width: calc(var(--vb-count, 11) * var(--vb-cell));
 }
 
 .vb-range {

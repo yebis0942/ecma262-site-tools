@@ -143,6 +143,10 @@
     const bar = document.createElement('div');
     bar.className = 'version-bar';
     bar.setAttribute('data-section-id', sectionId);
+    // The row and the slider are sized in CSS as --vb-count * --vb-cell, which
+    // is what makes the slider's percentage positions land exactly on cell
+    // boundaries (see .vb-row / .vb-slider in widgets.css).
+    bar.style.setProperty('--vb-count', String(manifest.versions.length));
     const row = document.createElement('div');
     row.className = 'vb-row';
 
