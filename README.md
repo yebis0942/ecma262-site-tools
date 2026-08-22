@@ -63,8 +63,9 @@ ecmarkup.build()  ──(utils.readFile フック: menu.js ソースにパッチ
         │
         ▼
   1. 生成 HTML ごとに parse5 でウィジェット注入
-     - manifest に載っている各 clause の <h1> 直後に .version-bar
      - <head> に widgets.css / 設定インライン script / ウィジェット script (defer)
+     - 設定には versionBarManifest (versions のみ) と versionBarSections
+       (そのページの節ごとの [追加, 削除] ブロック数。absent は null)
      - パスはページごとに相対計算 (multipage サブページ対応)
   2. アセット追加 (widgets.css, versionBarCore/versionBar/versionCompare/implLinks.js,
      version-bar-data/, impl-links.json)
@@ -74,14 +75,24 @@ ecmarkup.build()  ──(utils.readFile フック: menu.js ソースにパッチ
 ### ① 注入型ウィジェット（`assets/` + `lib/inject-widgets.mjs`）
 
 ecmarkup の**出力**（`emu-clause[id]` と h1 という文書構造）にのみ依存し、
-内部実装には依存しない。
+内部実装には依存しない。節見出しのボタン（`versions` / `impl`）と、そこから開く
+UI はすべてクライアント側で組み立てる。
 
-- **version-bar** — 各節の版ごとの変更量を棒グラフで示すバー。クリックで当該版の
-  内容表示（blame トグルで各ブロックの導入版を色分け）、範囲選択で版間 diff
-  （unified / side-by-side）。ブロック分割・diff 統計・blame はビルド時に事前計算し、
-  クライアントは fetch した分割済みデータを表示するだけ（ビルドとクライアントの
-  parse 一致問題を回避し、バー統計とパネル diff の不一致も原理的に排除）
-- **version-compare** — ecma262-compare へのリンクボタン（外部 releases.json + 内蔵フォールバック）
+- **version-bar** — 各節の版ごとの変更量を棒グラフで示すバー。**既定では畳まれていて**、
+  節見出しの `versions` ボタンで開く。クリックで当該版の内容表示（blame トグルで
+  各ブロックの導入版を色分け）、範囲選択で版間 diff（unified / side-by-side）、
+  選択範囲を ecma262-compare で開くリンク。「全節で表示」トグルは localStorage に
+  記憶され、次回以降は全バーが開いた状態で表示される。
+  ブロック分割・diff 統計・blame はビルド時に事前計算し、クライアントは fetch した
+  分割済みデータを表示するだけ（ビルドとクライアントの parse 一致問題を回避し、
+  バー統計とパネル diff の不一致も原理的に排除）。
+  バーの DOM 自体はページに焼き込まず、節あたり約 110 バイトの統計だけを埋めて
+  クライアントが組み立てる（焼き込むと節あたり約 2.5KB になり、全体で 10MB 規模）。
+  「全節で表示」が fetch 無しで即座に効くのはこのため
+- **version-compare** — 独立したウィジェットではなくなり、version-bar の範囲選択から
+  ecma262-compare を開く形に統合された。`assets/versionCompare.js` は版→コミット
+  ハッシュの解決だけを担う（外部 releases.json + 内蔵フォールバック）。
+  ES2015 は compare 側に対応する境界が無いため、範囲の端が ES2015 のときリンクは無効
 - **impl-links** — エンジン実装 (V8/SM/JSC/QJS) へのリンク（`data/impl-links.json`、`scripts/impl-links/` で再生成）
 
 ### ② menu.js パッチ（`patches/menu.js/` + `lib/patch-menu.mjs`）

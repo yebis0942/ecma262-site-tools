@@ -1,7 +1,7 @@
-/* ==== version-compare & impl-links widgets (extracted from fork css/elements.css) ==== */
+/* ==== clause-header buttons & impl-links widget ==== */
 
-/* Version Compare Widget */
-.version-compare-btn {
+/* Version bar toggle in the clause header (same chrome as the impl button) */
+.vb-toggle-btn {
   font-size: 0.5em;
   vertical-align: middle;
   margin-left: 0.5em;
@@ -16,127 +16,13 @@
   line-height: 1.4;
 }
 
-.version-compare-btn:hover {
+.vb-toggle-btn:hover {
   background: var(--control-dark-background-color);
 }
 
-.version-compare-panel {
-  position: absolute;
-  left: 0;
-  top: 100%;
-  z-index: 100;
-  background: var(--background-color);
-  border: 1px solid var(--control-border-color);
-  border-radius: 6px;
-  padding: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  min-width: 340px;
-  font-size: 14px;
-  font-family: 'IBM Plex Sans', sans-serif;
-}
-
-.version-compare-endpoints {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.version-compare-endpoint {
-  flex: 1;
-  padding: 4px 8px;
-  border: 1px solid var(--control-border-color);
-  border-radius: 3px;
-  background: var(--control-background-color);
-  color: var(--foreground-color);
-  cursor: pointer;
-  font-size: 13px;
-  font-family: inherit;
-  text-align: center;
-}
-
-.version-compare-endpoint:hover {
+.vb-toggle-btn.on {
   background: var(--control-dark-background-color);
-}
-
-.version-compare-endpoint.active {
-  border-color: var(--link-foreground-color);
-  background: var(--link-foreground-color);
-  color: #fff;
-}
-
-.version-compare-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 12px;
-}
-
-.version-compare-cell {
-  padding: 4px 6px;
-  border: 1px solid var(--control-border-color);
-  border-radius: 3px;
-  background: var(--control-background-color);
-  color: var(--foreground-color);
-  cursor: pointer;
-  font-size: 12px;
-  font-family: inherit;
-  line-height: 1.2;
-}
-
-.version-compare-cell:hover {
-  background: var(--control-dark-background-color);
-}
-
-.version-compare-cell.selected-from {
-  background: var(--link-foreground-color);
-  color: #fff;
-  border-color: var(--link-foreground-color);
-}
-
-.version-compare-cell.selected-to {
-  background: var(--link-foreground-color);
-  color: #fff;
-  border-color: var(--link-foreground-color);
-}
-
-.version-compare-cell.in-range {
-  background: var(--highlight-background-color);
-}
-
-.version-compare-open-btn {
-  display: block;
-  width: 100%;
-  padding: 6px 12px;
-  border: 1px solid var(--link-foreground-color);
-  border-radius: 4px;
-  background: var(--link-foreground-color);
-  color: #fff;
-  cursor: pointer;
-  font-size: 13px;
-  font-family: inherit;
-  text-align: center;
-}
-
-.version-compare-open-btn:hover {
-  opacity: 0.9;
-}
-
-.version-compare-close-btn {
-  position: absolute;
-  top: 6px;
-  right: 8px;
-  background: none;
-  border: none;
-  color: var(--foreground-color);
-  cursor: pointer;
-  font-size: 14px;
-  padding: 2px 4px;
-  line-height: 1;
-  opacity: 0.6;
-}
-
-.version-compare-close-btn:hover {
-  opacity: 1;
+  border-color: var(--vb-selected-bg, var(--control-border-color));
 }
 
 /* Implementation Links Widget */
@@ -209,6 +95,14 @@
 /* ==== version-bar widget ==== */
 
 :root {
+  /* Chart geometry. --vb-cell is the pitch: the bar plus the 1px of air on
+     each side that separates it from its neighbour. The row and the slider are
+     both sized to --vb-count * --vb-cell (assets/versionBar.js sets --vb-count
+     per bar), which is what keeps the slider's percentage positions lined up
+     with the cells — and, with no gap in play, exactly so. */
+  --vb-bar-w: 14px;
+  --vb-cell: 16px;
+
   --vb-border: #d4d0c8;
   --vb-bg: #fff;
   --vb-fg: #333;
@@ -296,7 +190,7 @@
 .vb-row {
   display: flex;
   align-items: flex-end;
-  gap: 3px;
+  width: calc(var(--vb-count, 11) * var(--vb-cell));
 }
 
 /* Segment cells are buttons; reset chrome and lay out bar over number */
@@ -307,8 +201,7 @@
   color: var(--vb-fg);
   padding: 0;
   margin: 0;
-  flex: 1;
-  min-width: 0;
+  flex: 0 0 var(--vb-cell);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -340,7 +233,7 @@
 
 /* Stacked add/del bar track */
 .vb-bar {
-  width: 14px;
+  width: var(--vb-bar-w);
   height: 32px;
   display: flex;
   flex-direction: column;
@@ -376,7 +269,7 @@
   font-size: 10px;
   font-weight: 700;
   margin-top: 3px;
-  padding: 1px 4px;
+  padding: 1px;
   border-radius: 3px;
   line-height: 1.3;
   transition: background 0.2s, color 0.2s;
@@ -392,6 +285,9 @@
   position: relative;
   height: 20px;
   margin: 6px 0 2px;
+  /* Same width as .vb-row: render() places the range and handles as
+     percentages of this element, so a mismatch puts them off the chart. */
+  width: calc(var(--vb-count, 11) * var(--vb-cell));
 }
 
 .vb-range {
@@ -543,6 +439,30 @@
 
 .vb-close:hover {
   opacity: 1;
+}
+
+/* Hands the selected pair to ecma262-compare; inert for a single edition or a
+   range ecma262-compare has no boundary for (ES2015). */
+.vb-compare-btn {
+  font-size: 11px;
+  font-family: inherit;
+  padding: 2px 8px;
+  border: 1px solid var(--control-border-color);
+  border-radius: 3px;
+  background: var(--control-background-color);
+  color: var(--control-link-foreground-color);
+  cursor: pointer;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.vb-compare-btn:hover:not(:disabled) {
+  background: var(--control-dark-background-color);
+}
+
+.vb-compare-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* ── Content panel ── */

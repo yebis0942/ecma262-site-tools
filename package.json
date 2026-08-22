@@ -7,7 +7,7 @@
 		"ecma262-build": "bin/ecma262-build.mjs"
 	},
 	"scripts": {
-		"test": "node test/diff-core.mjs && node test/section-blocks.mjs && node test/version-data.mjs && node test/smoke.mjs",
+		"test": "node test/diff-core.mjs && node test/section-blocks.mjs && node test/version-data.mjs && node test/version-compare.mjs && node test/smoke.mjs",
 		"generate-version-bar-data": "tsx scripts/generate-version-bar-data.ts"
 	},
 	"dependencies": {
