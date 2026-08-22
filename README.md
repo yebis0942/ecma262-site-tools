@@ -42,9 +42,14 @@ npm run generate-version-bar-data -- \
 ```
 
 公開済み各版の HTML を取得（`.version-cache/` にキャッシュ）し、
-manifest とセクション別 JSON を出力する。ES2016+ は `emu-clause`、
+manifest とセクション別 JSON を出力する。対象は ES2015〜ES2025 の 11 版
+（`scripts/version-bar-config.json`）。ES2016+ は `emu-clause`、
 ES2015 は旧形式 `<section id="sec-*">` にフォールバックして抽出する。
 保存前にサニタイズ済み（クライアントは innerHTML で挿入するため）。
+
+キャッシュ先はリポジトリルート固定の `.version-cache/`（引数で変更不可）なので、
+CI ではそのパスをキャッシュ対象にする。参考実測（11 版・キャッシュ温）:
+生成 約 11 秒 / peak rss 約 1.5GB / 出力 81MB・2,295 ファイル。
 
 生成データはスキーマ v2（`schemaVersion: 2`）: 各節をブロック分割した
 skeleton + blocks に加え、版間 diff 統計と blame（各ブロックの導入版）を含む。

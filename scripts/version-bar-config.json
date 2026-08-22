@@ -9,6 +9,7 @@
     { "key": "es12", "label": "ES2021 (12th)", "url": "https://262.ecma-international.org/12.0/" },
     { "key": "es13", "label": "ES2022 (13th)", "url": "https://262.ecma-international.org/13.0/" },
     { "key": "es14", "label": "ES2023 (14th)", "url": "https://262.ecma-international.org/14.0/" },
-    { "key": "es15", "label": "ES2024 (15th)", "url": "https://262.ecma-international.org/15.0/" }
+    { "key": "es15", "label": "ES2024 (15th)", "url": "https://262.ecma-international.org/15.0/" },
+    { "key": "es16", "label": "ES2025 (16th)", "url": "https://262.ecma-international.org/16.0/" }
   ]
 }
